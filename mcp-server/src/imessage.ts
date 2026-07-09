@@ -6,14 +6,40 @@
  * AppleScript source (injection barrier; preserve). First send triggers a
  * macOS Automation permission prompt for the host app.
  */
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const SCRIPT = `on run argv
+  set target to item 1 of argv
+  set msg to item 2 of argv
+  tell application "Messages"
+    set svc to 1st account whose service type = iMessage
+    set b to participant target of svc
+    send msg to b
+  end tell
+end run`;
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Contract: an email passes through unchanged; anything else is treated as a
  * phone number and stripped to quasi-E.164 (keep leading +, drop spaces,
  * dots, dashes, parentheses).
  */
-export function normalizeRecipient(_recipient: string): string {
-  throw new Error("Not implemented (B3-WPB)");
+export function normalizeRecipient(recipient: string): string {
+  const trimmed = recipient.trim();
+
+  if (trimmed.includes("@")) {
+    return trimmed;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+
+  if (digits.length === 0) {
+    throw new Error("Recipient phone number must contain at least one digit");
+  }
+
+  return `${trimmed.startsWith("+") ? "+" : ""}${digits}`;
 }
 
 /**
@@ -22,8 +48,36 @@ export function normalizeRecipient(_recipient: string): string {
  * on send.
  */
 export async function sendIMessage(
-  _recipient: string,
-  _text: string,
+  recipient: string,
+  text: string,
 ): Promise<void> {
-  throw new Error("Not implemented (B3-WPB)");
+  if (process.platform !== "darwin") {
+    throw new Error("iMessage sending requires macOS (Messages.app)…");
+  }
+
+  const normalizedRecipient = normalizeRecipient(recipient);
+
+  try {
+    await execFileAsync("osascript", ["-e", SCRIPT, normalizedRecipient, text]);
+  } catch (error) {
+    throw new Error(
+      `Failed to send iMessage via osascript: ${errorMessage(error)}`,
+    );
+  }
+}
+
+function errorMessage(error: unknown): string {
+  if (typeof error === "object" && error !== null && "stderr" in error) {
+    const stderr = String(error.stderr).trim();
+
+    if (stderr.length > 0) {
+      return stderr;
+    }
+  }
+
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message;
+  }
+
+  return "unknown error";
 }
