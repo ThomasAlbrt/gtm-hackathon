@@ -1,4 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- WP0 freezes stub signatures before WP1 implementations. */
+import { cache } from "react";
+
+import { getKv } from "./kv";
 
 /**
  * Visual identity and copy extracted for a company domain.
@@ -114,8 +116,15 @@ export function brandCacheKey(domain: string): `brand:v2:${string}` {
  * Contract: lowercase, NFD-stripped diacritics, plus a random 4-char base36
  * suffix, format firstname-xxxx, never sequential.
  */
-export function slugify(_firstName: string): string {
-  throw new Error("Not implemented (WP1)");
+export function slugify(firstName: string): string {
+  const base =
+    firstName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "contact";
+
+  return `${base}-${randomBase36Suffix()}`;
 }
 
 /**
@@ -123,28 +132,50 @@ export function slugify(_firstName: string): string {
  * be wrapped in React cache() in WP1 to dedupe the KV read between
  * generateMetadata and the page.
  */
-export async function getContact(_slug: string): Promise<Contact | null> {
-  throw new Error("Not implemented (WP1)");
+const getContactCached = cache(
+  async (slug: string): Promise<Contact | null> =>
+    getKv().get<Contact>(contactKey(slug)),
+);
+
+export async function getContact(slug: string): Promise<Contact | null> {
+  return getContactCached(slug);
 }
 
 /**
  * Contract: upsert the contact as JSON at contact:<slug>.
  */
-export async function saveContact(_contact: Contact): Promise<void> {
-  throw new Error("Not implemented (WP1)");
+export async function saveContact(contact: Contact): Promise<void> {
+  await getKv().set(contactKey(contact.id), contact);
 }
 
 /**
  * Contract: LPUSH the booking event onto "bookings" so newest events are first.
  */
-export async function pushBooking(_event: BookingEvent): Promise<void> {
-  throw new Error("Not implemented (WP1)");
+export async function pushBooking(event: BookingEvent): Promise<void> {
+  await getKv().lpush(BOOKINGS_KEY, event);
 }
 
 /**
  * Contract: read booking events from newest to oldest, respecting the optional
  * limit when provided.
  */
-export async function listBookings(_limit?: number): Promise<BookingEvent[]> {
-  throw new Error("Not implemented (WP1)");
+export async function listBookings(limit?: number): Promise<BookingEvent[]> {
+  const stop = limit ? limit - 1 : -1;
+
+  return (await getKv().lrange<BookingEvent>(BOOKINGS_KEY, 0, stop)) ?? [];
+}
+
+let previousSuffix: string | null = null;
+
+function randomBase36Suffix(): string {
+  let suffix = "";
+
+  do {
+    suffix = Array.from({ length: 4 }, () =>
+      Math.floor(Math.random() * 36).toString(36),
+    ).join("");
+  } while (suffix === previousSuffix);
+
+  previousSuffix = suffix;
+  return suffix;
 }

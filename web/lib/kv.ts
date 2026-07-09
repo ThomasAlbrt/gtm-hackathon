@@ -1,4 +1,6 @@
-import type { Redis } from "@upstash/redis";
+import { Redis } from "@upstash/redis";
+
+let client: Redis | null = null;
 
 /**
  * Contract: return a lazy Redis singleton. Accepts both Upstash env spellings:
@@ -6,5 +8,21 @@ import type { Redis } from "@upstash/redis";
  * module load so builds succeed without env.
  */
 export function getKv(): Redis {
-  throw new Error("Not implemented (WP1)");
+  if (client) {
+    return client;
+  }
+
+  const url =
+    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+
+  if (!url || !token) {
+    throw new Error(
+      "Missing Upstash env: set UPSTASH_REDIS_REST_URL/TOKEN or KV_REST_API_URL/TOKEN.",
+    );
+  }
+
+  client = new Redis({ url, token });
+  return client;
 }
