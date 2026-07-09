@@ -286,7 +286,7 @@ describe("tool handlers", () => {
     expect(resultJson(result)).toEqual({ bookings });
   });
 
-  it("createServer registers the six B3-WPC tools", () => {
+  it("createServer registers the gtm-campaign tools", () => {
     const server = createServer();
     const registeredTools = (
       server as unknown as { _registeredTools?: Record<string, unknown> }
@@ -302,6 +302,7 @@ describe("tool handlers", () => {
         "get_bookings",
         "get_brand",
         "launch_campaign",
+        "route_lead",
         "send_imessage",
         "set_sender_brand",
       ].sort(),

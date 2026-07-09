@@ -16,6 +16,7 @@ import {
   slugify,
 } from "./contacts.js";
 import { sendIMessage } from "./imessage.js";
+import { type RoutingLead, routeLead } from "./routing.js";
 
 const prospectInputSchema = {
   id: z.string().optional(),
@@ -56,6 +57,29 @@ const getBookingsInputSchema = {
   limit: z.number().int().positive().optional(),
 } satisfies z.ZodRawShape;
 
+const linkedInActivitySchema = z.object({
+  followers: z.number().optional(),
+  postCount: z.number().optional(),
+  commentCount: z.number().optional(),
+  lastActivityAt: z.string().optional(),
+  signalCount: z.number().optional(),
+  headline: z.string().optional(),
+  excerpts: z.array(z.string()).optional(),
+});
+
+const routeLeadInputSchema = {
+  firstName: z.string().min(1),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  role: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+  hasPriorInteraction: z.boolean().optional(),
+  lastInteractionAt: z.string().optional(),
+  linkedInActivity: linkedInActivitySchema.optional(),
+} satisfies z.ZodRawShape;
+
 type LaunchCampaignInput = {
   prospects: ProspectInput[];
   confirm?: boolean;
@@ -77,6 +101,8 @@ type GetBrandInput = {
 type GetBookingsInput = {
   limit?: number;
 };
+
+type RouteLeadInput = RoutingLead;
 
 function baseUrl(): string {
   return (process.env.SITE_BASE_URL ?? "http://localhost:3000").replace(
@@ -234,6 +260,10 @@ export const handlers = {
 
     return jsonResult({ bookings });
   },
+
+  async route_lead(input: RouteLeadInput): Promise<CallToolResult> {
+    return jsonResult(await routeLead(input));
+  },
 };
 
 const createLandingPageDescription =
@@ -242,10 +272,13 @@ const createLandingPageDescription =
 const launchCampaignDescription =
   "Launch a reviewed outbound campaign by creating landing pages and sending iMessages where possible. Requires the sales rep's EXPLICIT approval: call only after the rep has reviewed the prospect list and messages and said go. Set confirm=true only in that case.";
 
+const routeLeadDescription =
+  "Decide WHICH outbound channel to use for one lead (sms | linkedin | email | none), with a reason and confidence — does NOT send anything. SMS when there's a prior CRM interaction (set hasPriorInteraction/lastInteractionAt) and a phone; LinkedIn when the profile looks active (pass linkedInActivity signals from Sillage, judged via Claude when ANTHROPIC_API_KEY is set, heuristic otherwise); email otherwise.";
+
 /**
- * The "gtm-campaign" stdio MCP server. Tools (registered in B3-WPC):
+ * The "gtm-campaign" stdio MCP server. Tools:
  * create_landing_page, launch_campaign, send_imessage, set_sender_brand,
- * get_brand, get_bookings.
+ * get_brand, get_bookings, route_lead.
  */
 export function createServer(): McpServer {
   const server = new McpServer({ name: "gtm-campaign", version: "0.1.0" });
@@ -299,6 +332,14 @@ export function createServer(): McpServer {
       inputSchema: getBookingsInputSchema,
     },
     handlers.get_bookings,
+  );
+  server.registerTool(
+    "route_lead",
+    {
+      description: routeLeadDescription,
+      inputSchema: routeLeadInputSchema,
+    },
+    handlers.route_lead,
   );
 
   return server;
