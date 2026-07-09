@@ -59,7 +59,7 @@ describe("resolveBrand", () => {
     const result = await resolveBrand(" HTTPS://Stripe.com/docs ");
 
     expect(result).toBe(cached);
-    expect(mocks.get).toHaveBeenCalledWith("brand:v2:stripe.com");
+    expect(mocks.get).toHaveBeenCalledWith("brand:v3:stripe.com");
     expect(mocks.constructed).not.toHaveBeenCalled();
     expect(mocks.retrieve).not.toHaveBeenCalled();
     expect(mocks.extractStyleguide).not.toHaveBeenCalled();
@@ -72,7 +72,7 @@ describe("resolveBrand", () => {
     const result = await resolveBrand("stripe.com");
 
     expect(result).toBeNull();
-    expect(mocks.get).toHaveBeenCalledWith("brand:v2:stripe.com");
+    expect(mocks.get).toHaveBeenCalledWith("brand:v3:stripe.com");
     expect(mocks.constructed).not.toHaveBeenCalled();
     expect(mocks.retrieve).not.toHaveBeenCalled();
     expect(mocks.extractStyleguide).not.toHaveBeenCalled();
@@ -134,7 +134,7 @@ describe("resolveBrand", () => {
     expect(mocks.extractStyleguide).toHaveBeenCalledWith({
       domain: "stripe.com",
     });
-    expect(mocks.set).toHaveBeenCalledWith("brand:v2:stripe.com", result, {
+    expect(mocks.set).toHaveBeenCalledWith("brand:v3:stripe.com", result, {
       ex: 604800,
     });
   });
@@ -244,6 +244,28 @@ describe("resolveBrand", () => {
       palette: ["#0C0C0C", "#0E59EC", "#F7DFBC"],
       text: "#111827",
     });
+  });
+
+  it("prefers the styleguide accent over palette[0] without a role match", async () => {
+    vi.stubEnv("CONTEXT_DEV_API_KEY", "test-key");
+    mocks.retrieve.mockResolvedValueOnce({
+      brand: {
+        // palette[0] est le noir de la marque, pas sa couleur signature.
+        colors: [
+          { hex: "#040404", name: "Noir" },
+          { hex: "#FF5A21", name: "Orange" },
+        ],
+      },
+    });
+    mocks.extractStyleguide.mockResolvedValueOnce({
+      styleguide: {
+        colors: { accent: "#FF5A21" },
+      },
+    });
+
+    const result = await resolveBrand("styleguide-accent.example");
+
+    expect(result?.accent).toBe("#FF5A21");
   });
 
   it("omits background/text when neither roles nor styleguide provide them", async () => {
@@ -392,7 +414,7 @@ describe("ensureSenderBrand", () => {
       domain: "pigment.com",
       type: "by_domain",
     });
-    expect(mocks.set).toHaveBeenCalledWith("brand:v2:pigment.com", result, {
+    expect(mocks.set).toHaveBeenCalledWith("brand:v3:pigment.com", result, {
       ex: 604800,
     });
     expect(mocks.set).toHaveBeenCalledWith("sender:brand", result);

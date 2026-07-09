@@ -123,8 +123,8 @@ export function contactKey(slug: string): `contact:${string}` {
 /**
  * Return the Redis cache key for a brand domain.
  */
-export function brandCacheKey(domain: string): `brand:v2:${string}` {
-  return `brand:v2:${domain}`;
+export function brandCacheKey(domain: string): `brand:v3:${string}` {
+  return `brand:v3:${domain}`;
 }
 
 /**

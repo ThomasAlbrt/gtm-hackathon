@@ -16,7 +16,7 @@ import { getKv } from "./kv.js";
 
 /**
  * Contract: resolve a BrandKit for a domain.
- * 1. Cache first: brand:v2:<domain> (TTL 7 days on write) — saves 20
+ * 1. Cache first: brand:v3:<domain> (TTL 7 days on write) — saves 20
  *    Context.dev credits per domain.
  * 2. Otherwise Context.dev, two calls (10 credits each):
  *    - brand.retrieve → logos, colors, description, slogan, industry.
@@ -167,10 +167,14 @@ function buildBrandKit(
   const colors = brand.colors ?? [];
   const palette = dedupeColors(colors);
   const styleguideColors = styleguide?.colors;
+  // accent : rôle nommé, puis l'accent RÉEL du styleguide du site, et
+  // palette[0] en dernier recours seulement — palette[0] est souvent le noir
+  // de la marque, qui écraserait la couleur signature (ex. l'orange Userled)
+  // et rendrait le surlignage prospect invisible.
   const accent =
     colorForRole(colors, "accent") ??
-    palette[0] ??
-    nonEmptyString(styleguideColors?.accent);
+    nonEmptyString(styleguideColors?.accent) ??
+    palette[0];
   // background/text : uniquement des couleurs de RÔLE (nom explicite ou
   // styleguide du site) — jamais un slot arbitraire de palette : une couleur
   // de marque vive en fond ou en texte rend la page illisible (le web
