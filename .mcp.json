@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "gtm-campaign": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "for n in node /opt/homebrew/bin/node /usr/local/bin/node \"$HOME\"/.nvm/versions/node/v2*/bin/node; do if \"$n\" -e 'fetch' >/dev/null 2>&1; then exec \"$n\" mcp-server/dist/index.js; fi; done; echo 'gtm-campaign: no node >= 18 with global fetch found' >&2; exit 1"
+      ],
+      "env": {
+        "SITE_BASE_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
