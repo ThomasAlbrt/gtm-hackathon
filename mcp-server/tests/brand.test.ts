@@ -216,6 +216,55 @@ describe("resolveBrand", () => {
     });
   });
 
+  it("never fills background/text from palette slots without a role match", async () => {
+    vi.stubEnv("CONTEXT_DEV_API_KEY", "test-key");
+    mocks.retrieve.mockResolvedValueOnce({
+      brand: {
+        // Couleurs de marque sans rôle explicite : palette only.
+        colors: [
+          { hex: "#0C0C0C", name: "Noir" },
+          { hex: "#0E59EC", name: "Bleu" },
+          { hex: "#F7DFBC", name: "Crème" },
+        ],
+      },
+    });
+    mocks.extractStyleguide.mockResolvedValueOnce({
+      styleguide: {
+        colors: {
+          background: "#FFFFFF",
+          text: "#111827",
+        },
+      },
+    });
+
+    const result = await resolveBrand("palette-only.example");
+
+    expect(result).toMatchObject({
+      background: "#FFFFFF",
+      palette: ["#0C0C0C", "#0E59EC", "#F7DFBC"],
+      text: "#111827",
+    });
+  });
+
+  it("omits background/text when neither roles nor styleguide provide them", async () => {
+    vi.stubEnv("CONTEXT_DEV_API_KEY", "test-key");
+    mocks.retrieve.mockResolvedValueOnce({
+      brand: {
+        colors: [
+          { hex: "#0C0C0C", name: "Noir" },
+          { hex: "#0E59EC", name: "Bleu" },
+          { hex: "#F7DFBC", name: "Crème" },
+        ],
+      },
+    });
+    mocks.extractStyleguide.mockResolvedValueOnce({});
+
+    const result = await resolveBrand("no-roles.example");
+
+    expect(result?.background).toBeUndefined();
+    expect(result?.text).toBeUndefined();
+  });
+
   it("picks fontAccent from the first h2..h6 family differing from h1", async () => {
     vi.stubEnv("CONTEXT_DEV_API_KEY", "test-key");
     mocks.retrieve.mockResolvedValueOnce({

@@ -7,7 +7,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "demo:brand": "tsx scripts/demo-brand.ts"
+    "demo:brand": "tsx scripts/demo-brand.ts",
+    "sender:set": "tsx scripts/set-sender-brand.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

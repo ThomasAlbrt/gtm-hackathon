@@ -171,14 +171,15 @@ function buildBrandKit(
     colorForRole(colors, "accent") ??
     palette[0] ??
     nonEmptyString(styleguideColors?.accent);
+  // background/text : uniquement des couleurs de RÔLE (nom explicite ou
+  // styleguide du site) — jamais un slot arbitraire de palette : une couleur
+  // de marque vive en fond ou en texte rend la page illisible (le web
+  // retombe sur ses défauts neutres quand la valeur est absente).
   const background =
     colorForRole(colors, "background") ??
-    palette[1] ??
     nonEmptyString(styleguideColors?.background);
   const text =
-    colorForRole(colors, "text") ??
-    palette[2] ??
-    nonEmptyString(styleguideColors?.text);
+    colorForRole(colors, "text") ?? nonEmptyString(styleguideColors?.text);
   const primaryButton = styleguide?.components?.button?.primary;
   const logo = pickLogo(brand.logos ?? []);
   const icon = pickIcon(brand.logos ?? []);
