@@ -18,6 +18,7 @@ import {
 import { type LinkedInLead, sendLinkedIn } from "./heyreach.js";
 import { type EnrichInput, enrichContact } from "./fullenrich.js";
 import { sendIMessage } from "./imessage.js";
+import { type RoutingLead, routeLead } from "./routing.js";
 import {
   type SignalType,
   countSignals,
@@ -162,6 +163,29 @@ const sillageToLandingPageInputSchema = {
     .describe("Personalized message template; {firstName}, {company}, {signal} are replaced"),
 } satisfies z.ZodRawShape;
 
+const linkedInActivitySchema = z.object({
+  followers: z.number().optional(),
+  postCount: z.number().optional(),
+  commentCount: z.number().optional(),
+  lastActivityAt: z.string().optional(),
+  signalCount: z.number().optional(),
+  headline: z.string().optional(),
+  excerpts: z.array(z.string()).optional(),
+});
+
+const routeLeadInputSchema = {
+  firstName: z.string().min(1),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  role: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+  hasPriorInteraction: z.boolean().optional(),
+  lastInteractionAt: z.string().optional(),
+  linkedInActivity: linkedInActivitySchema.optional(),
+} satisfies z.ZodRawShape;
+
 type LaunchCampaignInput = {
   prospects: ProspectInput[];
   confirm?: boolean;
@@ -210,6 +234,8 @@ type SillageToLandingPageInput = {
   calLink?: string;
   message?: string;
 };
+
+type RouteLeadInput = RoutingLead;
 
 function baseUrl(): string {
   return (process.env.SITE_BASE_URL ?? "http://localhost:3000").replace(
@@ -568,6 +594,10 @@ export const handlers = {
       return errorResult(errorMessage(error));
     }
   },
+
+  async route_lead(input: RouteLeadInput): Promise<CallToolResult> {
+    return jsonResult(await routeLead(input));
+  },
 };
 
 const createLandingPageDescription =
@@ -582,12 +612,15 @@ const sendLinkedInDescription =
 const enrichContactDescription =
   "Find a prospect's professional email and/or phone via FullEnrich, from their name plus company/domain or LinkedIn URL. Returns best-effort email/phone and the raw FullEnrich payload. Requires FULLENRICH_MCP_TOKEN.";
 
+const routeLeadDescription =
+  "Decide WHICH outbound channel to use for one lead (sms | linkedin | email | none), with a reason and confidence — does NOT send anything. SMS when there's a prior CRM interaction (set hasPriorInteraction/lastInteractionAt) and a phone; LinkedIn when the profile looks active (pass linkedInActivity signals from Sillage, judged via Claude when ANTHROPIC_API_KEY is set, heuristic otherwise); email otherwise.";
+
 /**
  * The "gtm-campaign" stdio MCP server. Tools:
  * create_landing_page, launch_campaign, send_imessage, send_linkedin,
  * set_sender_brand, get_brand, get_bookings, enrich_contact,
  * get_sillage_signals, get_sillage_leads, get_sillage_accounts,
- * sillage_to_landing_pages.
+ * sillage_to_landing_pages, route_lead.
  */
 export function createServer(): McpServer {
   const server = new McpServer({ name: "gtm-campaign", version: "0.2.0" });
@@ -694,6 +727,14 @@ export function createServer(): McpServer {
       inputSchema: sillageToLandingPageInputSchema,
     },
     handlers.sillage_to_landing_pages,
+  );
+  server.registerTool(
+    "route_lead",
+    {
+      description: routeLeadDescription,
+      inputSchema: routeLeadInputSchema,
+    },
+    handlers.route_lead,
   );
 
   return server;

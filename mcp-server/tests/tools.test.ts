@@ -465,6 +465,7 @@ describe("tool handlers", () => {
         "get_sillage_leads",
         "get_sillage_signals",
         "launch_campaign",
+        "route_lead",
         "send_imessage",
         "send_linkedin",
         "set_sender_brand",
