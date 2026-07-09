@@ -60,7 +60,7 @@ orthographe `UPSTASH_REDIS_REST_*`), `ADMIN_TOKEN`, `CAL_WEBHOOK_SECRET`.
 
 ## `mcp-server/` — le serveur MCP « gtm-campaign »
 
-Six tools exposés à Claude (stdio) :
+Sept tools exposés à Claude (stdio) :
 
 | Tool | Rôle |
 | --- | --- |
@@ -70,17 +70,23 @@ Six tools exposés à Claude (stdio) :
 | `set_sender_brand` | Résout et fixe la marque émettrice (`SENDER_DOMAIN`, déf. pigment.com) |
 | `get_brand` | Résolution/inspection d'une marque |
 | `get_bookings` | Poll des bookings — le ping proactif quand un prospect réserve |
+| `enrich_contact` | Trouve email/téléphone d'un prospect via **FullEnrich** (MCP), à partir du nom + société/domaine ou URL LinkedIn |
 
 - **Résolution de marque** : Context.dev (`brand.retrieve` +
   `web.extractStyleguide`, ~20 crédits/domaine, cache 7 j). Intégralement
   best-effort : un échec de marque ne bloque jamais une page.
 - **iMessage** : `osascript` + Messages.app — fonctionne uniquement sur un
   Mac où Claude tourne ; destinataire et texte passent en argv AppleScript.
+- **FullEnrich** : client MCP vers le serveur hébergé
+  (`https://mcp.fullenrich.com/mcp`). Auth par token bearer
+  (`FULLENRICH_MCP_TOKEN`) en header — équivalent headless de l'OAuth
+  navigateur. Le tool d'enrichissement est découvert au runtime (`listTools`),
+  ou figé via `FULLENRICH_ENRICH_TOOL`.
 
 Env (`mcp-server/.env`, voir `.env.example`) : Upstash (même base que web),
 `CONTEXT_DEV_API_KEY`, `SENDER_DOMAIN`, `SITE_BASE_URL` (⚠️ à pointer sur le
 domaine de prod avant tout envoi réel — les URLs envoyées aux prospects
-partent de là).
+partent de là), `FULLENRICH_MCP_TOKEN` (enrichissement FullEnrich).
 
 ## Démarrage
 

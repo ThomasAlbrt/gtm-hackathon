@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   resolveBrand: vi.fn(),
   saveContact: vi.fn(),
   sendIMessage: vi.fn(),
+  enrichContact: vi.fn(),
 }));
 
 vi.mock("../src/brand.js", async (importOriginal) => {
@@ -37,6 +38,15 @@ vi.mock("../src/contacts.js", async (importOriginal) => {
     ...actual,
     listBookings: mocks.listBookings,
     saveContact: mocks.saveContact,
+  };
+});
+
+vi.mock("../src/fullenrich.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/fullenrich.js")>();
+
+  return {
+    ...actual,
+    enrichContact: mocks.enrichContact,
   };
 });
 
@@ -70,6 +80,7 @@ describe("tool handlers", () => {
     mocks.resolveBrand.mockResolvedValue(null);
     mocks.saveContact.mockResolvedValue(undefined);
     mocks.sendIMessage.mockResolvedValue(undefined);
+    mocks.enrichContact.mockResolvedValue({ raw: null });
   });
 
   it("create_landing_page returns a generated slug URL and saves only web contact fields", async () => {
@@ -270,6 +281,42 @@ describe("tool handlers", () => {
     expect(resultText(result)).toBe("Cannot send");
   });
 
+  it("enrich_contact returns the FullEnrich result and passes the prospect through", async () => {
+    mocks.enrichContact.mockResolvedValue({
+      email: "ada@acme.com",
+      phone: "+15550100",
+      raw: { source: "fullenrich" },
+    });
+
+    const result = await handlers.enrich_contact({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      company: "Acme",
+      domain: "acme.com",
+    });
+
+    expect(mocks.enrichContact).toHaveBeenCalledWith({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      company: "Acme",
+      domain: "acme.com",
+    });
+    expect(resultJson(result)).toEqual({
+      email: "ada@acme.com",
+      phone: "+15550100",
+      raw: { source: "fullenrich" },
+    });
+  });
+
+  it("enrich_contact surfaces failures as MCP errors", async () => {
+    mocks.enrichContact.mockRejectedValue(new Error("no token"));
+
+    const result = await handlers.enrich_contact({ firstName: "Ada" });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe("no token");
+  });
+
   it("get_bookings passes limit through and returns bookings", async () => {
     const bookings = [
       {
@@ -286,7 +333,7 @@ describe("tool handlers", () => {
     expect(resultJson(result)).toEqual({ bookings });
   });
 
-  it("createServer registers the six B3-WPC tools", () => {
+  it("createServer registers the gtm-campaign tools", () => {
     const server = createServer();
     const registeredTools = (
       server as unknown as { _registeredTools?: Record<string, unknown> }
@@ -299,6 +346,7 @@ describe("tool handlers", () => {
     expect(Object.keys(registeredTools).sort()).toEqual(
       [
         "create_landing_page",
+        "enrich_contact",
         "get_bookings",
         "get_brand",
         "launch_campaign",
