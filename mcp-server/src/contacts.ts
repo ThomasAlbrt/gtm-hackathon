@@ -50,6 +50,8 @@ export type Contact = {
   calLink?: string;
   email?: string;
   brand?: BrandKit;
+  /** Hackathon jury member (judge/mentor). */
+  jury?: boolean;
   createdAt: string;
 };
 

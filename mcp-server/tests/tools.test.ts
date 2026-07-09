@@ -84,6 +84,9 @@ describe("tool handlers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    // Hermétique vis-à-vis du .env du développeur (SITE_BASE_URL pointe la
+    // prod sur cette machine) — les assertions supposent le fallback localhost.
+    vi.stubEnv("SITE_BASE_URL", "http://localhost:3000");
 
     mocks.ensureSenderBrand.mockResolvedValue(null);
     mocks.listBookings.mockResolvedValue([]);

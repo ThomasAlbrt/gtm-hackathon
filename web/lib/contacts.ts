@@ -85,6 +85,8 @@ export type Contact = {
   email?: string;
   /** Company visual identity and copy. */
   brand?: BrandKit;
+  /** Hackathon jury member (judge/mentor). */
+  jury?: boolean;
   /** ISO timestamp for contact creation. */
   createdAt: string;
 };
