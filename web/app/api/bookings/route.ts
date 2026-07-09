@@ -1,5 +1,14 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- WP0 keeps the route signature ready for implementation. */
+import { listBookings } from "../../../lib/contacts";
+import { requireAdmin } from "../auth";
 
-export async function GET(_req: Request) {
-  return Response.json({ error: "Not implemented" }, { status: 501 });
+export async function GET(req: Request) {
+  const unauthorized = requireAdmin(req);
+
+  if (unauthorized) {
+    return unauthorized;
+  }
+
+  const bookings = await listBookings();
+
+  return Response.json({ bookings });
 }
