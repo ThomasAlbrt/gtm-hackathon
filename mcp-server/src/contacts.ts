@@ -86,6 +86,8 @@ export type ProspectInput = {
   phone?: string;
   /** iMessage body; with phone, triggers the outreach send. */
   smsText?: string;
+  /** LinkedIn profile URL; when set, enrolls the prospect into HeyReach. */
+  linkedinUrl?: string;
 };
 
 /** Redis list key containing booking events, newest first. */

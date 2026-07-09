@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   resolveBrand: vi.fn(),
   saveContact: vi.fn(),
   sendIMessage: vi.fn(),
+  sendLinkedIn: vi.fn(),
   enrichContact: vi.fn(),
 }));
 
@@ -28,6 +29,15 @@ vi.mock("../src/imessage.js", async (importOriginal) => {
   return {
     ...actual,
     sendIMessage: mocks.sendIMessage,
+  };
+});
+
+vi.mock("../src/heyreach.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/heyreach.js")>();
+
+  return {
+    ...actual,
+    sendLinkedIn: mocks.sendLinkedIn,
   };
 });
 
@@ -80,6 +90,7 @@ describe("tool handlers", () => {
     mocks.resolveBrand.mockResolvedValue(null);
     mocks.saveContact.mockResolvedValue(undefined);
     mocks.sendIMessage.mockResolvedValue(undefined);
+    mocks.sendLinkedIn.mockResolvedValue(undefined);
     mocks.enrichContact.mockResolvedValue({ raw: null });
   });
 
@@ -193,6 +204,7 @@ describe("tool handlers", () => {
     expect(mocks.ensureSenderBrand).not.toHaveBeenCalled();
     expect(mocks.saveContact).not.toHaveBeenCalled();
     expect(mocks.sendIMessage).not.toHaveBeenCalled();
+    expect(mocks.sendLinkedIn).not.toHaveBeenCalled();
   });
 
   it("launch_campaign creates pages and reports sent and skipped SMS statuses", async () => {
@@ -225,11 +237,13 @@ describe("tool handlers", () => {
           id: "ada",
           url: "http://localhost:3000/ada",
           sms: "sent",
+          linkedin: "skipped (no linkedinUrl)",
         },
         {
           id: "grace",
           url: "http://localhost:3000/grace",
           sms: "skipped (no phone/smsText)",
+          linkedin: "skipped (no linkedinUrl)",
         },
       ],
     });
@@ -237,6 +251,76 @@ describe("tool handlers", () => {
     expect(mocks.saveContact).toHaveBeenCalledTimes(2);
     expect(mocks.sendIMessage).toHaveBeenCalledTimes(1);
     expect(mocks.sendIMessage).toHaveBeenCalledWith("+15550100", "Hi Ada");
+    expect(mocks.sendLinkedIn).not.toHaveBeenCalled();
+  });
+
+  it("launch_campaign enrolls prospects with a linkedinUrl into HeyReach", async () => {
+    const result = await handlers.launch_campaign({
+      confirm: true,
+      prospects: [
+        {
+          id: "ada",
+          firstName: "Ada",
+          lastName: "Lovelace",
+          company: "Acme",
+          role: "CTO",
+          email: "ada@acme.com",
+          signal: "Acme is hiring RevOps.",
+          linkedinUrl: "https://www.linkedin.com/in/ada",
+        },
+      ],
+    });
+
+    expect(resultJson(result)).toEqual({
+      senderBrand: null,
+      report: [
+        {
+          id: "ada",
+          url: "http://localhost:3000/ada",
+          sms: "skipped (no phone/smsText)",
+          linkedin: "sent",
+        },
+      ],
+    });
+    expect(mocks.sendLinkedIn).toHaveBeenCalledTimes(1);
+    expect(mocks.sendLinkedIn).toHaveBeenCalledWith({
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      company: "Acme",
+      position: "CTO",
+      email: "ada@acme.com",
+    });
+  });
+
+  it("launch_campaign reports LinkedIn failure while keeping the created page", async () => {
+    mocks.sendLinkedIn.mockRejectedValue(new Error("HeyReach down"));
+
+    const result = await handlers.launch_campaign({
+      confirm: true,
+      prospects: [
+        {
+          id: "ada",
+          firstName: "Ada",
+          company: "Acme",
+          signal: "Acme is hiring RevOps.",
+          linkedinUrl: "https://www.linkedin.com/in/ada",
+        },
+      ],
+    });
+
+    expect(resultJson(result)).toEqual({
+      senderBrand: null,
+      report: [
+        {
+          id: "ada",
+          url: "http://localhost:3000/ada",
+          sms: "skipped (no phone/smsText)",
+          linkedin: "failed: HeyReach down",
+        },
+      ],
+    });
+    expect(mocks.saveContact).toHaveBeenCalledTimes(1);
   });
 
   it("launch_campaign reports SMS failure while keeping the created page", async () => {
@@ -263,6 +347,7 @@ describe("tool handlers", () => {
           id: "ada",
           url: "http://localhost:3000/ada",
           sms: "failed: Messages unavailable",
+          linkedin: "skipped (no linkedinUrl)",
         },
       ],
     });
@@ -281,6 +366,31 @@ describe("tool handlers", () => {
     expect(resultText(result)).toBe("Cannot send");
   });
 
+  it("send_linkedin enrolls the lead and confirms on success", async () => {
+    const result = await handlers.send_linkedin({
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+      firstName: "Ada",
+    });
+
+    expect(mocks.sendLinkedIn).toHaveBeenCalledWith({
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+      firstName: "Ada",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(resultText(result)).toBe(
+      "Enrolled https://www.linkedin.com/in/ada into HeyReach campaign",
+    );
+  });
+
+  it("send_linkedin surfaces failures as MCP errors", async () => {
+    mocks.sendLinkedIn.mockRejectedValue(new Error("Campaign not active"));
+
+    const result = await handlers.send_linkedin({
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe("Campaign not active");
   it("enrich_contact returns the FullEnrich result and passes the prospect through", async () => {
     mocks.enrichContact.mockResolvedValue({
       email: "ada@acme.com",
@@ -333,7 +443,7 @@ describe("tool handlers", () => {
     expect(resultJson(result)).toEqual({ bookings });
   });
 
-  it("createServer registers the gtm-campaign tools", () => {
+  it("createServer registers all campaign tools", () => {
     const server = createServer();
     const registeredTools = (
       server as unknown as { _registeredTools?: Record<string, unknown> }
@@ -351,6 +461,7 @@ describe("tool handlers", () => {
         "get_brand",
         "launch_campaign",
         "send_imessage",
+        "send_linkedin",
         "set_sender_brand",
       ].sort(),
     );

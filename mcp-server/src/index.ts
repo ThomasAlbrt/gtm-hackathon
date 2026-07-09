@@ -15,6 +15,7 @@ import {
   saveContact,
   slugify,
 } from "./contacts.js";
+import { type LinkedInLead, sendLinkedIn } from "./heyreach.js";
 import { type EnrichInput, enrichContact } from "./fullenrich.js";
 import { sendIMessage } from "./imessage.js";
 
@@ -33,6 +34,7 @@ const prospectInputSchema = {
   email: z.string().optional(),
   phone: z.string().optional(),
   smsText: z.string().optional(),
+  linkedinUrl: z.string().optional(),
 } satisfies z.ZodRawShape;
 
 const launchCampaignInputSchema = {
@@ -43,6 +45,15 @@ const launchCampaignInputSchema = {
 const sendIMessageInputSchema = {
   recipient: z.string().min(1),
   text: z.string().min(1),
+} satisfies z.ZodRawShape;
+
+const sendLinkedInInputSchema = {
+  linkedinUrl: z.string().min(1),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  position: z.string().optional(),
+  email: z.string().optional(),
 } satisfies z.ZodRawShape;
 
 const setSenderBrandInputSchema = {
@@ -74,6 +85,8 @@ type SendIMessageInput = {
   recipient: string;
   text: string;
 };
+
+type SendLinkedInInput = LinkedInLead;
 
 type SetSenderBrandInput = {
   domain?: string;
@@ -171,7 +184,12 @@ export const handlers = {
       senderBrand = null;
     }
 
-    const report: Array<{ id: string; url: string; sms: string }> = [];
+    const report: Array<{
+      id: string;
+      url: string;
+      sms: string;
+      linkedin: string;
+    }> = [];
 
     for (const prospect of input.prospects) {
       const landingPage = await createLandingPage(prospect);
@@ -189,7 +207,28 @@ export const handlers = {
         }
       }
 
-      report.push({ ...landingPage, sms });
+      let linkedin = "skipped (no linkedinUrl)";
+      if (prospect.linkedinUrl) {
+        try {
+          await sendLinkedIn({
+            linkedinUrl: prospect.linkedinUrl,
+            firstName: prospect.firstName,
+            company: prospect.company,
+            ...(prospect.lastName !== undefined
+              ? { lastName: prospect.lastName }
+              : {}),
+            ...(prospect.role !== undefined
+              ? { position: prospect.role }
+              : {}),
+            ...(prospect.email !== undefined ? { email: prospect.email } : {}),
+          });
+          linkedin = "sent";
+        } catch (error) {
+          linkedin = `failed: ${errorMessage(error)}`;
+        }
+      }
+
+      report.push({ ...landingPage, sms, linkedin });
     }
 
     return jsonResult({ report, senderBrand: senderBrand?.domain ?? null });
@@ -199,6 +238,15 @@ export const handlers = {
     try {
       await sendIMessage(input.recipient, input.text);
       return textResult(`Sent to ${input.recipient}`);
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
+
+  async send_linkedin(input: SendLinkedInInput): Promise<CallToolResult> {
+    try {
+      await sendLinkedIn(input);
+      return textResult(`Enrolled ${input.linkedinUrl} into HeyReach campaign`);
     } catch (error) {
       return errorResult(errorMessage(error));
     }
@@ -259,13 +307,18 @@ const createLandingPageDescription =
   "Create a personalized landing page for one prospect. Synthesize `signal` into ONE short English sentence before calling — it renders verbatim as the hero badge on the page (never raw CSV columns or Sillage payloads).";
 
 const launchCampaignDescription =
-  "Launch a reviewed outbound campaign by creating landing pages and sending iMessages where possible. Requires the sales rep's EXPLICIT approval: call only after the rep has reviewed the prospect list and messages and said go. Set confirm=true only in that case.";
+  "Launch a reviewed outbound campaign by creating landing pages and, where possible, sending iMessages (phone+smsText) and enrolling prospects into LinkedIn outreach via HeyReach (linkedinUrl). Requires the sales rep's EXPLICIT approval: call only after the rep has reviewed the prospect list and messages and said go. Set confirm=true only in that case.";
+
+const sendLinkedInDescription =
+  "Enroll one prospect into the configured HeyReach campaign (HEYREACH_CAMPAIGN_ID) by their LinkedIn profile URL, so HeyReach runs its connect + message sequence. The message copy lives in the HeyReach campaign, not here.";
 
 const enrichContactDescription =
   "Find a prospect's professional email and/or phone via FullEnrich, from their name plus company/domain or LinkedIn URL. Returns best-effort email/phone and the raw FullEnrich payload. Requires FULLENRICH_MCP_TOKEN.";
 
 /**
  * The "gtm-campaign" stdio MCP server. Tools:
+ * create_landing_page, launch_campaign, send_imessage, send_linkedin,
+ * set_sender_brand, get_brand, get_bookings.
  * create_landing_page, launch_campaign, send_imessage, set_sender_brand,
  * get_brand, get_bookings, enrich_contact.
  */
@@ -295,6 +348,14 @@ export function createServer(): McpServer {
       inputSchema: sendIMessageInputSchema,
     },
     handlers.send_imessage,
+  );
+  server.registerTool(
+    "send_linkedin",
+    {
+      description: sendLinkedInDescription,
+      inputSchema: sendLinkedInInputSchema,
+    },
+    handlers.send_linkedin,
   );
   server.registerTool(
     "set_sender_brand",
