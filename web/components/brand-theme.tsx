@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type { BrandKit } from "../lib/contacts";
+import { brandCssVars, fontFaceRules } from "../lib/brand-css";
 
 type BrandThemeProps = {
   /** Brand driving the page theme (the SENDER's brand, not the prospect's). */
@@ -15,6 +16,22 @@ type BrandThemeProps = {
  * (neutral defaults live in globals.css). All values pass the lib/brand-css
  * sanitization barrier.
  */
-export function BrandTheme({ brand: _brand, children }: BrandThemeProps) {
-  return <div data-brand-theme="stub">{children}</div>;
+export function BrandTheme({ brand, children }: BrandThemeProps) {
+  if (!brand) {
+    return <div data-brand-theme="neutral">{children}</div>;
+  }
+
+  const fontCss = fontFaceRules(brand.fontLinks);
+
+  return (
+    <>
+      {fontCss ? <style>{fontCss}</style> : null}
+      <div
+        data-brand-theme={brand.domain}
+        style={brandCssVars(brand) as CSSProperties}
+      >
+        {children}
+      </div>
+    </>
+  );
 }
