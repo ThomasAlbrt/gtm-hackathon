@@ -253,8 +253,20 @@ export default async function PersonalizedLandingPage({
           style={footerBandStyle}
         >
           <div className="mx-auto w-full max-w-6xl">
-            {senderName} · Préparé personnellement pour {contact.firstName} chez{" "}
-            {contact.company}
+            {senderName} · Préparé personnellement pour{" "}
+            <span
+              className="font-medium"
+              style={{ color: "var(--prospect-accent, var(--brand-accent))" }}
+            >
+              {contact.firstName}
+            </span>{" "}
+            chez{" "}
+            <span
+              className="font-medium"
+              style={{ color: "var(--prospect-accent, var(--brand-accent))" }}
+            >
+              {contact.company}
+            </span>
           </div>
         </footer>
       </main>
