@@ -391,6 +391,8 @@ describe("tool handlers", () => {
 
     expect(result.isError).toBe(true);
     expect(resultText(result)).toBe("Campaign not active");
+  });
+
   it("enrich_contact returns the FullEnrich result and passes the prospect through", async () => {
     mocks.enrichContact.mockResolvedValue({
       email: "ada@acme.com",
@@ -459,10 +461,14 @@ describe("tool handlers", () => {
         "enrich_contact",
         "get_bookings",
         "get_brand",
+        "get_sillage_accounts",
+        "get_sillage_leads",
+        "get_sillage_signals",
         "launch_campaign",
         "send_imessage",
         "send_linkedin",
         "set_sender_brand",
+        "sillage_to_landing_pages",
       ].sort(),
     );
   });
