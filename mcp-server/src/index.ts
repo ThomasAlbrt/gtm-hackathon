@@ -16,6 +16,13 @@ import {
   slugify,
 } from "./contacts.js";
 import { sendIMessage } from "./imessage.js";
+import {
+  type SignalType,
+  countSignals,
+  getAllLeads,
+  querySignals,
+  summarizeAccounts,
+} from "./sillage.js";
 
 const prospectInputSchema = {
   id: z.string().optional(),
@@ -56,6 +63,85 @@ const getBookingsInputSchema = {
   limit: z.number().int().positive().optional(),
 } satisfies z.ZodRawShape;
 
+const SIGNAL_TYPES = [
+  "keywordDetection",
+  "newJob",
+  "recentlyPromoted",
+  "jobPostingKeywordDetection",
+  "competitorInboundComment",
+  "competitorOutboundComment",
+  "partnerInboundComment",
+  "partnerOutboundComment",
+  "customerInboundComment",
+  "customerOutboundComment",
+  "influencerInboundComment",
+  "influencerOutboundComment",
+  "championInboundComment",
+  "championOutboundComment",
+] as const;
+
+const getSillageSignalsInputSchema = {
+  company_domain: z
+    .array(z.string())
+    .optional()
+    .describe("Filter by one or more company domains (e.g. ['stripe.com'])"),
+  type: z
+    .array(z.enum(SIGNAL_TYPES))
+    .optional()
+    .describe("Filter by signal type(s)"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Results per page (max 100, default 25)"),
+  cursor: z.string().optional().describe("Pagination cursor from previous call"),
+} satisfies z.ZodRawShape;
+
+const getSillageLeadsInputSchema = {
+  company_domain: z
+    .string()
+    .optional()
+    .describe("Filter leads to a single company domain"),
+  top_n: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe("Return only the top N leads by signal count (default: all)"),
+} satisfies z.ZodRawShape;
+
+const getSillageAccountsInputSchema = {
+  top_n: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe("Return only the top N accounts by signal strength (default: all)"),
+} satisfies z.ZodRawShape;
+
+const sillageToLandingPageInputSchema = {
+  company_domain: z
+    .string()
+    .min(1)
+    .describe("Company domain to pull leads from (e.g. 'stripe.com')"),
+  top_n: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .optional()
+    .describe("Number of top leads to create pages for (default: 5)"),
+  calLink: z.string().optional().describe("Cal.com booking link for all pages"),
+  message: z
+    .string()
+    .optional()
+    .describe("Personalized message template; {firstName}, {company}, {signal} are replaced"),
+} satisfies z.ZodRawShape;
+
 type LaunchCampaignInput = {
   prospects: ProspectInput[];
   confirm?: boolean;
@@ -76,6 +162,29 @@ type GetBrandInput = {
 
 type GetBookingsInput = {
   limit?: number;
+};
+
+type GetSillageSignalsInput = {
+  company_domain?: string[];
+  type?: SignalType[];
+  limit?: number;
+  cursor?: string;
+};
+
+type GetSillageLeadsInput = {
+  company_domain?: string;
+  top_n?: number;
+};
+
+type GetSillageAccountsInput = {
+  top_n?: number;
+};
+
+type SillageToLandingPageInput = {
+  company_domain: string;
+  top_n?: number;
+  calLink?: string;
+  message?: string;
 };
 
 function baseUrl(): string {
@@ -234,6 +343,164 @@ export const handlers = {
 
     return jsonResult({ bookings });
   },
+
+  async get_sillage_signals(
+    input: GetSillageSignalsInput,
+  ): Promise<CallToolResult> {
+    try {
+      const result = await querySignals({
+        company_domain: input.company_domain,
+        type: input.type,
+        limit: input.limit,
+        cursor: input.cursor,
+      });
+      return jsonResult(result);
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
+
+  async get_sillage_leads(
+    input: GetSillageLeadsInput,
+  ): Promise<CallToolResult> {
+    try {
+      let leads = await getAllLeads();
+
+      if (input.company_domain) {
+        leads = leads.filter(
+          (l) => l.company?.domain === input.company_domain,
+        );
+      }
+
+      const accounts = summarizeAccounts(leads);
+
+      if (input.top_n) {
+        for (const acct of accounts) {
+          acct.topLeads = acct.topLeads.slice(0, input.top_n);
+        }
+      }
+
+      return jsonResult({
+        total_leads: leads.length,
+        accounts,
+      });
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
+
+  async get_sillage_accounts(
+    input: GetSillageAccountsInput,
+  ): Promise<CallToolResult> {
+    try {
+      const total = await countSignals();
+      const leads = await getAllLeads();
+      let accounts = summarizeAccounts(leads);
+
+      if (input.top_n) {
+        accounts = accounts.slice(0, input.top_n);
+      }
+
+      return jsonResult({
+        total_signals: total,
+        total_leads: leads.length,
+        accounts: accounts.map((a) => ({
+          company: a.company,
+          domain: a.domain,
+          leadCount: a.leadCount,
+          totalLeadSignals: a.totalLeadSignals,
+          topLeadName:
+            a.topLeads[0]?.name ?? null,
+          topLeadPosition:
+            a.topLeads[0]?.position ?? null,
+        })),
+      });
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
+
+  async sillage_to_landing_pages(
+    input: SillageToLandingPageInput,
+  ): Promise<CallToolResult> {
+    try {
+      const allLeads = await getAllLeads();
+      const companyLeads = allLeads.filter(
+        (l) => l.company?.domain === input.company_domain,
+      );
+
+      if (companyLeads.length === 0) {
+        return errorResult(
+          `No Sillage leads found for domain: ${input.company_domain}`,
+        );
+      }
+
+      const sorted = companyLeads.sort(
+        (a, b) => b.signals.length - a.signals.length,
+      );
+      const topLeads = sorted.slice(0, input.top_n ?? 5);
+
+      const pages: Array<{
+        id: string;
+        url: string;
+        name: string;
+        company: string;
+        signal: string;
+      }> = [];
+
+      for (const lead of topLeads) {
+        const keywords = new Set<string>();
+        let bestExcerpt: string | null = null;
+
+        for (const s of lead.signals) {
+          for (const kw of s.data.keywords_found ?? []) {
+            keywords.add(kw.replace(/^"|"$/g, ""));
+          }
+          if (!bestExcerpt && s.data.post?.extract) {
+            bestExcerpt = s.data.post.extract;
+          }
+        }
+
+        const signalText = bestExcerpt
+          ? `${lead.firstName} recently posted about ${[...keywords].slice(0, 2).join(" and ")} on LinkedIn`
+          : `${lead.signals.length} intent signal(s) detected — active in ${[...keywords].slice(0, 3).join(", ")}`;
+
+        let message = input.message;
+        if (message) {
+          message = message
+            .replace(/\{firstName\}/g, lead.firstName)
+            .replace(/\{company\}/g, lead.company?.name ?? "your company")
+            .replace(/\{signal\}/g, signalText);
+        }
+
+        const page = await createLandingPage({
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          company: lead.company?.name ?? input.company_domain,
+          domain: input.company_domain,
+          role: lead.position ?? undefined,
+          signal: signalText,
+          email: lead.email ?? undefined,
+          calLink: input.calLink,
+          message,
+        });
+
+        pages.push({
+          ...page,
+          name: `${lead.firstName} ${lead.lastName}`.trim(),
+          company: lead.company?.name ?? input.company_domain,
+          signal: signalText,
+        });
+      }
+
+      return jsonResult({
+        created: pages.length,
+        pages,
+      });
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
 };
 
 const createLandingPageDescription =
@@ -243,12 +510,14 @@ const launchCampaignDescription =
   "Launch a reviewed outbound campaign by creating landing pages and sending iMessages where possible. Requires the sales rep's EXPLICIT approval: call only after the rep has reviewed the prospect list and messages and said go. Set confirm=true only in that case.";
 
 /**
- * The "gtm-campaign" stdio MCP server. Tools (registered in B3-WPC):
- * create_landing_page, launch_campaign, send_imessage, set_sender_brand,
- * get_brand, get_bookings.
+ * The "gtm-campaign" stdio MCP server.
+ * Tools: create_landing_page, launch_campaign, send_imessage,
+ * set_sender_brand, get_brand, get_bookings,
+ * get_sillage_signals, get_sillage_leads, get_sillage_accounts,
+ * sillage_to_landing_pages.
  */
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "gtm-campaign", version: "0.1.0" });
+  const server = new McpServer({ name: "gtm-campaign", version: "0.2.0" });
 
   server.registerTool(
     "create_landing_page",
@@ -299,6 +568,43 @@ export function createServer(): McpServer {
       inputSchema: getBookingsInputSchema,
     },
     handlers.get_bookings,
+  );
+
+  server.registerTool(
+    "get_sillage_signals",
+    {
+      description:
+        "Query intent signals from Sillage. Filter by company domain and/or signal type. Returns LinkedIn post excerpts, author info, keywords matched, and source URLs. Cursor-paginated (pass next_cursor for more).",
+      inputSchema: getSillageSignalsInputSchema,
+    },
+    handlers.get_sillage_signals,
+  );
+  server.registerTool(
+    "get_sillage_leads",
+    {
+      description:
+        "List leads from Sillage grouped by company, ranked by signal count. Each lead includes name, title, email, LinkedIn URL, matched keywords, and their top LinkedIn post excerpt. Optionally filter to one company domain.",
+      inputSchema: getSillageLeadsInputSchema,
+    },
+    handlers.get_sillage_leads,
+  );
+  server.registerTool(
+    "get_sillage_accounts",
+    {
+      description:
+        "Overview of all monitored accounts with their lead counts and total signal strength. Use this to prioritize which accounts to target first.",
+      inputSchema: getSillageAccountsInputSchema,
+    },
+    handlers.get_sillage_accounts,
+  );
+  server.registerTool(
+    "sillage_to_landing_pages",
+    {
+      description:
+        "Pull the top leads for a company from Sillage and create personalized landing pages for each. Automatically resolves the company brand (logo, colors, fonts) and synthesizes the signal into a hero badge. Use {firstName}, {company}, {signal} placeholders in the message template.",
+      inputSchema: sillageToLandingPageInputSchema,
+    },
+    handlers.sillage_to_landing_pages,
   );
 
   return server;

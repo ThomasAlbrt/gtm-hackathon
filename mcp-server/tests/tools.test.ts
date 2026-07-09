@@ -301,9 +301,13 @@ describe("tool handlers", () => {
         "create_landing_page",
         "get_bookings",
         "get_brand",
+        "get_sillage_accounts",
+        "get_sillage_leads",
+        "get_sillage_signals",
         "launch_campaign",
         "send_imessage",
         "set_sender_brand",
+        "sillage_to_landing_pages",
       ].sort(),
     );
   });
