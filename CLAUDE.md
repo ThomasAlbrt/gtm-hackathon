@@ -62,8 +62,10 @@ Tous verts avant chaque commit. Commits en français, terminés par la ligne
 - **Slugs** : `firstname-xxxx` (NFD, suffixe base36 aléatoire) — jamais
   séquentiels, non devinables.
 - **`signal`** : rendu VERBATIM en badge sur la page — toujours le
-  synthétiser en une phrase courte en anglais avant tout appel de tool.
-- **Contenu visible des pages : anglais.** Docs et commits : français.
+  synthétiser en une phrase courte avant tout appel de tool.
+- **Langue** : le chrome des landing pages est en FRANÇAIS (design de la
+  prep validé par l'équipe) ; `signal` et `message` rendent verbatim dans la
+  langue où le rep les écrit. Docs et commits : français.
 
 ## Env
 
