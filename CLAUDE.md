@@ -63,9 +63,9 @@ Tous verts avant chaque commit. Commits en français, terminés par la ligne
   séquentiels, non devinables.
 - **`signal`** : rendu VERBATIM en badge sur la page — toujours le
   synthétiser en une phrase courte avant tout appel de tool.
-- **Langue** : le chrome des landing pages est en FRANÇAIS (design de la
-  prep validé par l'équipe) ; `signal` et `message` rendent verbatim dans la
-  langue où le rep les écrit. Docs et commits : français.
+- **Langue** : tout le contenu visible des landing pages (chrome, copy) est
+  en ANGLAIS (décision du 9 juillet) ; `signal` et `message` rendent verbatim
+  dans la langue où le rep les écrit. Docs et commits : français.
 
 ## Env
 
