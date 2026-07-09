@@ -3,6 +3,20 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Neutral --brand-* defaults. BrandTheme overrides them on its wrapper div
+     (never on :root); pages must theme exclusively through these variables. */
+  --brand-accent: #171717;
+  --brand-background: #ffffff;
+  --brand-text: #171717;
+  --brand-cta: #171717;
+  --brand-cta-text: #ffffff;
+  --brand-palette-1: #111111;
+  --brand-palette-2: #555555;
+  --brand-palette-3: #e5e5e5;
+  --brand-font-heading: var(--font-geist-sans);
+  --brand-font-body: var(--font-geist-sans);
+  --brand-font-accent: var(--font-geist-sans);
 }
 
 @theme inline {

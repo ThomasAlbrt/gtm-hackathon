@@ -3,6 +3,21 @@ import { cache } from "react";
 import { getKv } from "./kv";
 
 /**
+ * A downloadable font file plus the family it registers. Consumed by the
+ * brand theming layer to emit @font-face rules; produced by brand resolution.
+ */
+export type FontLink = {
+  /** Font family name the file registers. */
+  family: string;
+  /** HTTPS URL of the font file (woff2/woff/ttf/otf). */
+  url: string;
+  /** Numeric CSS weight, e.g. "400". */
+  weight?: string;
+  /** CSS font style, e.g. "italic". */
+  style?: string;
+};
+
+/**
  * Visual identity and copy extracted for a company domain.
  */
 export type BrandKit = {
@@ -34,8 +49,8 @@ export type BrandKit = {
   fontBody?: string;
   /** Accent font family name. */
   fontAccent?: string;
-  /** Public font stylesheet URLs. */
-  fontLinks?: string[];
+  /** Font files to register via @font-face. */
+  fontLinks?: FontLink[];
   /** Brand slogan or tagline. */
   slogan?: string;
   /** Short brand description. */
@@ -146,6 +161,14 @@ export async function getContact(slug: string): Promise<Contact | null> {
  */
 export async function saveContact(contact: Contact): Promise<void> {
   await getKv().set(contactKey(contact.id), contact);
+}
+
+/**
+ * Contract: read the sender company's brand kit from sender:brand, or null
+ * when it has not been resolved yet.
+ */
+export async function getSenderBrand(): Promise<BrandKit | null> {
+  return getKv().get<BrandKit>(SENDER_BRAND_KEY);
 }
 
 /**
