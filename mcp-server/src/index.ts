@@ -16,6 +16,7 @@ import {
   slugify,
 } from "./contacts.js";
 import { type LinkedInLead, sendLinkedIn } from "./heyreach.js";
+import { type EnrichInput, enrichContact } from "./fullenrich.js";
 import { sendIMessage } from "./imessage.js";
 
 const prospectInputSchema = {
@@ -67,6 +68,14 @@ const getBookingsInputSchema = {
   limit: z.number().int().positive().optional(),
 } satisfies z.ZodRawShape;
 
+const enrichContactInputSchema = {
+  firstName: z.string().min(1),
+  lastName: z.string().optional(),
+  company: z.string().optional(),
+  domain: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+} satisfies z.ZodRawShape;
+
 type LaunchCampaignInput = {
   prospects: ProspectInput[];
   confirm?: boolean;
@@ -90,6 +99,8 @@ type GetBrandInput = {
 type GetBookingsInput = {
   limit?: number;
 };
+
+type EnrichContactInput = EnrichInput;
 
 function baseUrl(): string {
   return (process.env.SITE_BASE_URL ?? "http://localhost:3000").replace(
@@ -282,6 +293,14 @@ export const handlers = {
 
     return jsonResult({ bookings });
   },
+
+  async enrich_contact(input: EnrichContactInput): Promise<CallToolResult> {
+    try {
+      return jsonResult(await enrichContact(input));
+    } catch (error) {
+      return errorResult(errorMessage(error));
+    }
+  },
 };
 
 const createLandingPageDescription =
@@ -293,10 +312,15 @@ const launchCampaignDescription =
 const sendLinkedInDescription =
   "Enroll one prospect into the configured HeyReach campaign (HEYREACH_CAMPAIGN_ID) by their LinkedIn profile URL, so HeyReach runs its connect + message sequence. The message copy lives in the HeyReach campaign, not here.";
 
+const enrichContactDescription =
+  "Find a prospect's professional email and/or phone via FullEnrich, from their name plus company/domain or LinkedIn URL. Returns best-effort email/phone and the raw FullEnrich payload. Requires FULLENRICH_MCP_TOKEN.";
+
 /**
  * The "gtm-campaign" stdio MCP server. Tools:
  * create_landing_page, launch_campaign, send_imessage, send_linkedin,
  * set_sender_brand, get_brand, get_bookings.
+ * create_landing_page, launch_campaign, send_imessage, set_sender_brand,
+ * get_brand, get_bookings, enrich_contact.
  */
 export function createServer(): McpServer {
   const server = new McpServer({ name: "gtm-campaign", version: "0.1.0" });
@@ -358,6 +382,14 @@ export function createServer(): McpServer {
       inputSchema: getBookingsInputSchema,
     },
     handlers.get_bookings,
+  );
+  server.registerTool(
+    "enrich_contact",
+    {
+      description: enrichContactDescription,
+      inputSchema: enrichContactInputSchema,
+    },
+    handlers.enrich_contact,
   );
 
   return server;
